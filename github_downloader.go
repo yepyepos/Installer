@@ -15,16 +15,20 @@ import (
 	"net/http"
 	"os"
 	path "path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 type GithubRelease struct {
-	Name    string `json:"name"`
-	TagName string `json:"tag_name"`
-	Assets  []struct {
+	Name        string `json:"name"`
+	TagName     string `json:"tag_name"`
+	Body        string `json:"body"`
+	PublishedAt string `json:"published_at"`
+	Assets      []struct {
 		Name        string `json:"name"`
 		DownloadURL string `json:"browser_download_url"`
 	} `json:"assets"`
@@ -37,6 +41,124 @@ var GithubDoneChan chan bool
 var InstalledHash = "None"
 var LatestHash = "Unknown"
 var IsDevInstall bool
+
+// Vencord zh-CN release contract (see docs/VENCORD_RELEASE_CONTRACT.md):
+// a release qualifies as a desktop Vencord release if it ships all of these
+// assets (matched by name prefix, so .map siblings match too), and its release
+// notes carry the machine readable build hash line "Vencord-Desktop-Hash: <hash>"
+// which must equal the "// Vencord <hash>" header of the shipped patcher.js.
+var requiredDesktopAssets = []string{"patcher.js", "preload.js", "renderer.js", "renderer.css"}
+
+var desktopHashRe = regexp.MustCompile(`(?mi)^vencord-desktop-hash:[ \t]*([0-9a-f]{7,40})[ \t]*$`)
+
+func HasAllDesktopAssets(release *GithubRelease) bool {
+	for _, name := range requiredDesktopAssets {
+		found := false
+		for _, ass := range release.Assets {
+			if strings.HasPrefix(ass.Name, name) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
+}
+
+// ExtractDesktopHash returns the build hash a release advertises for its
+// desktop dist files. Prefers the explicit contract marker in the release
+// notes; falls back to the upstream format where the release NAME ends with
+// the hash ("DevBuild <hash>").
+func ExtractDesktopHash(release *GithubRelease) string {
+	if m := desktopHashRe.FindStringSubmatch(release.Body); m != nil {
+		return strings.ToLower(m[1])
+	}
+	i := strings.LastIndex(release.Name, " ") + 1
+	return release.Name[i:]
+}
+
+// selectVencordRelease picks the newest published release that actually ships
+// all required desktop assets. Order of the API response is NOT relied upon;
+// releases are compared by published_at. Pre-releases are eligible, drafts are
+// never returned by the API.
+func selectVencordRelease(releases []GithubRelease) (*GithubRelease, error) {
+	var best *GithubRelease
+	var bestTime time.Time
+	for i := range releases {
+		release := &releases[i]
+		if !HasAllDesktopAssets(release) {
+			continue
+		}
+		published, err := time.Parse(time.RFC3339, release.PublishedAt)
+		if err != nil {
+			published = time.Time{}
+		}
+		if best == nil || published.After(bestTime) {
+			best = release
+			bestTime = published
+		}
+	}
+	if best == nil {
+		return nil, errors.New("no yepyepos/Vencord release ships the required Vencord desktop files (patcher.js, preload.js, renderer.js, renderer.css)")
+	}
+	return best, nil
+}
+
+func fetchGithubReleases(url, fallbackUrl string) ([]GithubRelease, error) {
+	Log.Debug("Fetching", url)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		Log.Error("Failed to create Request", err)
+		return nil, err
+	}
+
+	req.Header.Set("User-Agent", UserAgent)
+
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		Log.Error("Failed to send Request", err)
+		return nil, err
+	}
+
+	defer res.Body.Close()
+
+	if res.StatusCode >= 300 {
+		isRateLimitedOrBlocked := res.StatusCode == 401 || res.StatusCode == 403 || res.StatusCode == 429
+		triedFallback := url == fallbackUrl
+
+		if isRateLimitedOrBlocked && !triedFallback {
+			Log.Error(fmt.Sprintf("Failed to fetch %s (status code %d). Trying fallback url %s", url, res.StatusCode, fallbackUrl))
+			return fetchGithubReleases(fallbackUrl, fallbackUrl)
+		}
+
+		err = errors.New(res.Status)
+		Log.Error(url, "returned Non-OK status", err)
+		return nil, err
+	}
+
+	var releases []GithubRelease
+
+	if err = json.NewDecoder(res.Body).Decode(&releases); err != nil {
+		Log.Error("Failed to decode GitHub JSON Response", err)
+		return nil, err
+	}
+
+	return releases, nil
+}
+
+// GetLatestVencordRelease fetches the release to install Vencord from.
+// Only yepyepos/Vencord is ever queried; there is deliberately no fallback to
+// the official English Vencord repositories.
+func GetLatestVencordRelease() (*GithubRelease, error) {
+	releases, err := fetchGithubReleases(ReleaseUrl, ReleaseUrlFallback)
+	if err != nil {
+		return nil, err
+	}
+	return selectVencordRelease(releases)
+}
 
 func GetGithubRelease(url, fallbackUrl string) (*GithubRelease, error) {
 	Log.Debug("Fetching", url)
@@ -99,16 +221,17 @@ func InitGithubDownloader() {
 			GithubDoneChan <- GithubError == nil
 		}()
 
-		data, err := GetGithubRelease(ReleaseUrl, ReleaseUrlFallback)
+		data, err := GetLatestVencordRelease()
 		if err != nil {
+			Log.Error("Failed to fetch Vencord release data:", err)
 			GithubError = err
 			return
 		}
 
 		ReleaseData = *data
 
-		i := strings.LastIndex(data.Name, " ") + 1
-		LatestHash = data.Name[i:]
+		LatestHash = ExtractDesktopHash(data)
+		Log.Debug("Selected release", data.TagName, "("+data.Name+")")
 		Log.Debug("Finished fetching GitHub Data")
 		Log.Debug("Latest hash is", LatestHash, "Local Install is", Ternary(LatestHash == InstalledHash, "up to date!", "outdated!"))
 	}()
@@ -153,10 +276,14 @@ func installLatestBuilds() (retErr error) {
 	var downloadedFiles atomic.Uint64
 
 	for _, ass := range ReleaseData.Assets {
-		if strings.HasPrefix(ass.Name, "patcher.js") ||
-			strings.HasPrefix(ass.Name, "preload.js") ||
-			strings.HasPrefix(ass.Name, "renderer.js") ||
-			strings.HasPrefix(ass.Name, "renderer.css") {
+		isRequired := false
+		for _, required := range requiredDesktopAssets {
+			if strings.HasPrefix(ass.Name, required) {
+				isRequired = true
+				break
+			}
+		}
+		if isRequired {
 			wg.Add(1)
 			ass := ass // Need to do this to not have the variable be overwritten halfway through
 			go func() {
@@ -209,6 +336,20 @@ func installLatestBuilds() (retErr error) {
 
 	Log.Debug("Done!")
 	_ = FixOwnership(FilesDir)
+
+	// Contract check: the downloaded patcher.js must carry the same build hash
+	// the release advertised. Never trust "up to date" on a mismatch.
+	f, err := os.Open(path.Join(FilesDir, "patcher.js"))
+	if err == nil {
+		scanner := bufio.NewScanner(f)
+		if scanner.Scan() {
+			line := scanner.Text()
+			if !strings.HasPrefix(line, "// Vencord ") || line[11:] != LatestHash {
+				Log.Warn("Release contract violation: downloaded patcher.js hash does not match the hash advertised by the release!", line, "!=", LatestHash)
+			}
+		}
+		f.Close()
+	}
 
 	InstalledHash = LatestHash
 	return

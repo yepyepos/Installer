@@ -11,8 +11,15 @@ import (
 	"vencordinstaller/buildinfo"
 )
 
-const ReleaseUrl = "https://api.github.com/repos/Vendicated/Vencord/releases/latest"
-const ReleaseUrlFallback = "https://vencord.dev/releases/vencord"
+// The zh-CN fork installs Vencord exclusively from yepyepos/Vencord.
+// We use the releases LIST endpoint (not /releases/latest) because the newest
+// published release must be selected by actually shipping the required desktop
+// dist assets, and pre-releases have to be selectable too.
+// The fallback intentionally points at the same endpoint: if GitHub API access
+// fails, the installer must fail loudly instead of silently falling back to the
+// official English Vencord (Vendicated/Vencord / vencord.dev).
+const ReleaseUrl = "https://api.github.com/repos/yepyepos/Vencord/releases?per_page=20"
+const ReleaseUrlFallback = "https://api.github.com/repos/yepyepos/Vencord/releases?per_page=20"
 const InstallerReleaseUrl = "https://api.github.com/repos/Vencord/Installer/releases/latest"
 const InstallerReleaseUrlFallback = "https://vencord.dev/releases/installer"
 
