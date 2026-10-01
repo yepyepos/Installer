@@ -72,8 +72,12 @@ Release 侧:   release body 中的一行机器可读标记（不区分大小写�
 - `constants.go`: `ReleaseUrl` / `ReleaseUrlFallback` → yepyepos/Vencord 列表端点。
 - `github_downloader.go`: `GetLatestVencordRelease`（列表 + 选择）、`ExtractDesktopHash`
   （marker 优先、名称回退）、`HasAllDesktopAssets`（4 资产前缀匹配）、下载后 contract 校验。
-- Self Updater 仍指官方仓库（`self_updater.go` / `InstallerReleaseUrl`）——**Phase I4 处理**；
-  PoC 构建未注入版本号（`buildinfo.InstallerTag = "Unknown"`），自更新自动禁用。
+- ~~Self Updater 仍指官方仓库~~（Phase I4 已完成重定向）：安装器自更新来源为
+  **yepyepos/Installer** 列表端点，按版本号选最高 tag，从该 Release 的 assets 按
+  官方同名（`VencordInstaller.exe` / `VencordInstallerCli.exe`）解析下载地址；
+  fallback 与主源同端点，不存在任何指向官方仓库的回退路径。
+  详见 `docs/INSTALLER_LOCALIZATION_ZH_CN.md` 的"Self Updater"章节与
+  `self_updater.go` / `version.go`。
 
 ## 尚未实现（记录在案）
 

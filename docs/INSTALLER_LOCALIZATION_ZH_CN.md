@@ -1,6 +1,7 @@
 # Installer 简体中文本地化（Phase I2）
 
 > 适用版本：Phase I2 起（基于 I3 的 `76fdeb3`/`b8331e5` 之上）。
+> I4 增补：Self Updater 重定向与更新策略，见文末"Self Updater（Phase I4 增补）"。
 > 范围：GUI / CLI 全部用户可见文本的简体中文化 + Windows GUI 的 CJK 字体支持。
 
 ## 翻译架构
@@ -90,3 +91,67 @@ if runtime.GOOS == "windows" {
 - 上游已知行为（非 I2 引入）：若某次下载中途失败留下部分 dist 文件（patcher.js 已存在
   且 hash 匹配），下次运行会视为"已是最新"跳过下载。已记录，建议 I5/I6 增强（校验
   4 个文件齐全）。
+
+---
+
+## Self Updater（Phase I4 增补）
+
+### 更新链架构
+
+```text
+VencordInstaller(-zh-CN).exe 启动（release 构建，buildinfo.InstallerTag ≠ "Unknown"）
+  → GET https://api.github.com/repos/yepyepos/Installer/releases?per_page=20
+  → 按版本号选最高 tag（含 pre-release；列表顺序不可依赖，已实测）
+  → compareVersions(latest_tag, 本地注入 tag) > 0 才提示更新
+  → 用户确认（GUI 弹窗 / CLI --update-self 或菜单）
+  → 从该 Release 的 assets 中按名解析 VencordInstaller.exe / VencordInstallerCli.exe
+  → 下载 + Content-Length 校验 → 覆盖自身 → 重启 → 仍是中文安装器
+```
+
+### 更新策略与版本命名
+
+```text
+官方 Installer:      v1.4.2
+中文 Fork 基线:      v1.4.2-zh.1 → v1.4.2-zh.2 → …（zh.N 为 fork 自身迭代）
+排序规则（version.go compareVersions）:
+  v1.4.2 < v1.4.2-zh.1 < v1.4.2-zh.2 < v1.4.10-zh.1 < v1.5.0-zh.1
+  - 数字段逐位比较（1.4.10 > 1.4.2，非字符串比较）
+  - 带 -zh.N 后缀 > 无后缀（同核心版本时）
+  - 无法解析的 tag（devbuild/Unknown/其它后缀）永不参与比较、永不触发更新
+```
+
+- 本地版本来自构建时 ldflags 注入的 `buildinfo.InstallerTag`（与官方机制相同）。
+- 中文版本号与 Vencord 主项目（v1.15.7-zh.4）相互独立、不混用。
+
+### Asset 命名
+
+沿用官方 asset 名（`VencordInstaller.exe` / `VencordInstallerCli.exe` / …），保证
+drop-in 兼容；zh-CN 标识写在 Release 标题/说明中。macOS/Linux 资产暂不发布（I5 处理）。
+
+### 失败回滚
+
+- 下载不完整（Content-Length 不匹配）→ 拒绝替换，临时文件删除，旧 exe 完好。
+- 覆盖自身失败（rename 失败）→ 自动把 `.old` 备份恢复原名并提示，旧版继续可用。
+- 更新检查/下载网络失败 → 明确报错退出；fallback 与主源同为 yepyepos/Installer，
+  **架构上不可能回退到官方 Vencord/Installer 或 vencord.dev**。
+- 最新 Release 缺少对应 asset → 明确报错，不触碰现有 exe。
+
+### 与官方实现的差异（仅此四点）
+
+1. `InstallerReleaseUrl/Fallback`：官方 `/releases/latest`（Vencord/Installer）→ fork
+   列表端点（yepyepos/Installer）。
+2. 版本判断：官方 tag 字符串不等比较 → fork 语义化比较（支持 zh.N 递增与无死循环）。
+3. 下载：官方固定 `releases/latest/download/<name>` → fork 从选定 Release 的 assets
+   解析（使 pre-release 可选、缺失 asset 有明确错误）。
+4. 新增替换失败时的 `.old` 恢复逻辑；官方是删除失败即报错（可能留下无 exe 状态）。
+
+替换、临时文件、重启（RelaunchSelf）、`.old` 清理机制与官方实现完全一致。
+
+### 真机验证记录（v1.4.2-zh.1 → v1.4.2-zh.2）
+
+- CLI `-update-self`：版本由 zh.1 变为 zh.2，`✔ 操作成功！`，重启后 `-version` 确认。
+- zh.2 再次 `-update-self` → "无法自更新：已是最新版本"（无更新死循环）。
+- GUI zh.1 启动即弹出中文更新提示（"安装器已有新版本！"截图确认）。
+- 断网（假代理）更新检查 → 中文明确失败，旧 exe 完好，日志中只有 yepyepos 域名。
+- 删除 zh.2 的 CLI asset 后更新 → "最新 Release 中未找到更新文件"，旧版完好。
+- 更新后的安装器 I3 回归：仍从 yepyepos/Vencord 下载 4 个桌面文件，SHA256 全部一致。
