@@ -13,6 +13,11 @@ on:
 env:
   VERSION: ${{ github.ref_name }}
 
+# The release job publishes a draft release for the pushed tag; the default
+# GITHUB_TOKEN on forks is read-only, so explicitly grant contents write.
+permissions:
+  contents: write
+
 jobs:
   build-windows:
     runs-on: windows-latest
