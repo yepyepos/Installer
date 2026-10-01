@@ -39,22 +39,23 @@ func die(msg string) {
 }
 
 func main() {
+	enableUTF8Console()
 	InitGithubDownloader()
 	discords = FindDiscords()
 
 	// Used by log.go init func
-	flag.Bool("debug", false, "Enable debug info")
+	flag.Bool("debug", false, L.CliFlagDebug)
 
-	var helpFlag = flag.Bool("help", false, "View usage instructions")
-	var versionFlag = flag.Bool("version", false, "View the program version")
-	var updateSelfFlag = flag.Bool("update-self", false, "Update me to the latest version")
-	var installFlag = flag.Bool("install", false, "Install Vencord")
-	var updateFlag = flag.Bool("repair", false, "Repair Vencord")
-	var uninstallFlag = flag.Bool("uninstall", false, "Uninstall Vencord")
-	var installOpenAsarFlag = flag.Bool("install-openasar", false, "Install OpenAsar")
-	var uninstallOpenAsarFlag = flag.Bool("uninstall-openasar", false, "Uninstall OpenAsar")
-	var locationFlag = flag.String("location", "", "The location of the Discord install to modify")
-	var branchFlag = flag.String("branch", "", "The branch of Discord to modify [auto|stable|ptb|canary]")
+	var helpFlag = flag.Bool("help", false, L.CliFlagHelp)
+	var versionFlag = flag.Bool("version", false, L.CliFlagVersion)
+	var updateSelfFlag = flag.Bool("update-self", false, L.CliFlagUpdateSelf)
+	var installFlag = flag.Bool("install", false, L.CliFlagInstall)
+	var updateFlag = flag.Bool("repair", false, L.CliFlagRepair)
+	var uninstallFlag = flag.Bool("uninstall", false, L.CliFlagUninstall)
+	var installOpenAsarFlag = flag.Bool("install-openasar", false, L.CliFlagInstallOA)
+	var uninstallOpenAsarFlag = flag.Bool("uninstall-openasar", false, L.CliFlagUninstallOA)
+	var locationFlag = flag.String("location", "", L.CliFlagLocation)
+	var branchFlag = flag.String("branch", "", L.CliFlagBranch)
 	flag.Parse()
 
 	if *helpFlag {
@@ -71,7 +72,7 @@ func main() {
 
 	if *updateSelfFlag {
 		if !<-SelfUpdateCheckDoneChan {
-			die("Can't update self because checking for updates failed")
+			die(L.CliDieUpdateCheckFail)
 		}
 		if err := UpdateSelf(); err != nil {
 			Log.Error("Failed to update self:", err)
@@ -81,16 +82,16 @@ func main() {
 	}
 
 	if *locationFlag != "" && *branchFlag != "" {
-		die("The 'location' and 'branch' flags are mutually exclusive.")
+		die(L.CliErrFlagsExclusive)
 	}
 
 	if !isValidBranch(*branchFlag) {
-		die("The 'branch' flag must be one of the following: [auto|stable|ptb|canary]")
+		die(L.CliErrBranchInvalid)
 	}
 
 	if *installFlag || *updateFlag {
 		if !<-GithubDoneChan {
-			die("Not " + Ternary(*installFlag, "installing", "updating") + " as fetching release data failed. If this issue persists, see https://vencord.dev/support")
+			die(Ternary(*installFlag, L.CliDieFetchFailInstall, L.CliDieFetchFailRepair))
 		}
 	}
 
@@ -102,34 +103,34 @@ func main() {
 		go func() {
 			<-SelfUpdateCheckDoneChan
 			if IsSelfOutdated {
-				Log.Warn("Your installer is outdated.")
-				Log.Warn("To update, select the 'Update Vencord Installer' option to update, or run with --update-self")
+				Log.Warn(L.CliWarnOutdated)
+				Log.Warn(L.CliWarnOutdatedHint)
 			}
 		}()
 
 		choices := []string{
-			"Install Vencord",
-			"Repair Vencord",
-			"Uninstall Vencord",
-			"Install OpenAsar",
-			"Uninstall OpenAsar",
-			"View Help Menu",
-			"Update Vencord Installer",
-			"Quit",
+			L.CliFlagInstall,
+			L.CliFlagRepair,
+			L.CliFlagUninstall,
+			L.CliFlagInstallOA,
+			L.CliFlagUninstallOA,
+			L.CliMenuHelp,
+			L.CliMenuUpdate,
+			L.CliMenuQuit,
 		}
 		_, choice, err := (&promptui.Select{
-			Label: "What would you like to do? (Press Enter to confirm)",
+			Label: L.CliMenuPrompt,
 			Items: choices,
 		}).Run()
 		handlePromptError(err)
 
 		switch choice {
-		case "View Help Menu":
+		case L.CliMenuHelp:
 			flag.Usage()
 			return
-		case "Quit":
+		case L.CliMenuQuit:
 			return
-		case "Update Vencord Installer":
+		case L.CliMenuUpdate:
 			if err := UpdateSelf(); err != nil {
 				Log.Error("Failed to update self:", err)
 				exitFailure()
@@ -147,9 +148,9 @@ func main() {
 	} else if uninstall {
 		errSilent = PromptDiscord("unpatch", *locationFlag, *branchFlag).unpatch()
 	} else if update {
-		Log.Info("Downloading latest Vencord files...")
+		Log.Info(L.CliDownloading)
 		err := installLatestBuilds()
-		Log.Info("Done!")
+		Log.Info(L.CliDone)
 		if err == nil {
 			errSilent = PromptDiscord("repair", *locationFlag, *branchFlag).patch()
 		}
@@ -158,14 +159,14 @@ func main() {
 		if !discord.IsOpenAsar() {
 			err = discord.InstallOpenAsar()
 		} else {
-			die("OpenAsar already installed")
+			die(L.CliOpenAsarAlready)
 		}
 	} else if uninstallOpenAsar {
 		discord := PromptDiscord("patch", *locationFlag, *branchFlag)
 		if discord.IsOpenAsar() {
 			err = discord.UninstallOpenAsar()
 		} else {
-			die("OpenAsar not installed")
+			die(L.CliOpenAsarNotInstalled)
 		}
 	}
 
@@ -182,7 +183,7 @@ func main() {
 
 func exit(status int) {
 	if runtime.GOOS == "windows" && IsDoubleClickRun() && interactive {
-		fmt.Print("Press Enter to exit")
+		fmt.Println(L.CliPressEnterToExit)
 		var b byte
 		_, _ = fmt.Scanf("%v", &b)
 	}
@@ -190,12 +191,12 @@ func exit(status int) {
 }
 
 func exitSuccess() {
-	color.HiGreen("✔ Success!")
+	color.HiGreen(L.CliExitSuccess)
 	exit(0)
 }
 
 func exitFailure() {
-	color.HiRed("❌ Failed! If this issue persists, see https://vencord.dev/support")
+	color.HiRed(L.CliExitFailure)
 	exit(1)
 }
 
@@ -217,7 +218,7 @@ func PromptDiscord(action, dir, branch string) *DiscordInstall {
 				}
 			}
 		}
-		die("No Discord install found. Before proceeding, make sure Discord is installed. snap is not supported!")
+		die(L.CliNoDiscord)
 	}
 
 	if branch != "" {
@@ -227,7 +228,7 @@ func PromptDiscord(action, dir, branch string) *DiscordInstall {
 				return install
 			}
 		}
-		die("Discord " + branch + " not found")
+		die(fmt.Sprintf(L.CliBranchNotFoundFmt, branch))
 	}
 
 	if dir != "" {
@@ -239,29 +240,39 @@ func PromptDiscord(action, dir, branch string) *DiscordInstall {
 			return discord
 		}
 
-		die(dir + " is not a valid Discord install. Hint: snap is not supported")
+		die(fmt.Sprintf(L.CliInvalidLocationFmt, dir))
 	}
 
 	items := SliceMap(discords, func(d any) string {
 		install := d.(*DiscordInstall)
 		//goland:noinspection GoDeprecation
-		return fmt.Sprintf("%s - %s%s", strings.Title(install.branch), install.path, Ternary(install.isPatched, " [Vencord Installed]", ""))
+		return fmt.Sprintf("%s - %s%s", strings.Title(install.branch), install.path, Ternary(install.isPatched, L.CliVencordInstalledTag, ""))
 	})
-	items = append(items, "Custom Location")
+	items = append(items, L.CliCustomLocationItem)
+
+	promptLabel := ""
+	switch action {
+	case "patch":
+		promptLabel = L.CliSelectPatch
+	case "unpatch":
+		promptLabel = L.CliSelectUnpatch
+	default:
+		promptLabel = L.CliSelectRepair
+	}
 
 	_, choice, err := (&promptui.Select{
-		Label: "Select Discord install to " + action + " (Press Enter to confirm)",
+		Label: promptLabel,
 		Items: items,
 	}).Run()
 	handlePromptError(err)
 
-	if choice != "Custom Location" {
+	if choice != L.CliCustomLocationItem {
 		return discords[SliceIndex(items, choice)].(*DiscordInstall)
 	}
 
 	for {
 		custom, err := (&promptui.Prompt{
-			Label: "Custom Discord Location",
+			Label: L.CliCustomLocationPrompt,
 		}).Run()
 		handlePromptError(err)
 
@@ -273,7 +284,7 @@ func PromptDiscord(action, dir, branch string) *DiscordInstall {
 			return di
 		}
 
-		Log.Error("Invalid Discord install!")
+		Log.Error(L.CliInvalidDiscord)
 	}
 }
 
@@ -286,8 +297,7 @@ func InstallLatestBuilds() error {
 }
 
 func HandleScuffedInstall() {
-	fmt.Println("Hold On!")
-	fmt.Println("You have a broken Discord Install.")
-	fmt.Println("Please reinstall Discord before proceeding!")
-	fmt.Println("Otherwise, Vencord will likely not work.")
+	fmt.Println(L.CliScuffedBody1)
+	fmt.Println(L.CliScuffedBody2)
+	fmt.Println(L.CliScuffedBody3)
 }

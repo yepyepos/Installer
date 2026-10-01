@@ -16,6 +16,7 @@ import (
 	"image/color"
 
 	g "github.com/AllenDang/giu"
+	"github.com/AllenDang/go-findfont"
 	"github.com/AllenDang/imgui-go"
 
 	// png decoder for icon
@@ -41,8 +42,8 @@ var (
 	didAutoComplete        bool
 
 	modalId      = 0
-	modalTitle   = "Oh No :("
-	modalMessage = "You should never see this"
+	modalTitle   = ""
+	modalMessage = ""
 	modalExtra   = ""
 
 	acceptedOpenAsar   bool
@@ -73,6 +74,17 @@ func main() {
 		<-SelfUpdateCheckDoneChan
 		g.Update()
 	}()
+
+	// giu's Style.SetFontSize clones defaultFonts[0] for every font size, which
+	// is Calibri (Latin only) on Windows and would render Chinese text as '?'.
+	// Make the CJK-capable Microsoft YaHei the first default font so that every
+	// font size derives from it. Size 16 = giu's defaultFontSize (14) + 2, the
+	// same size giu registers its Windows default fonts with.
+	if runtime.GOOS == "windows" {
+		if _, err := findfont.Find("MSYH"); err == nil {
+			g.SetDefaultFont("MSYH", 16)
+		}
+	}
 
 	win = g.NewMasterWindow("Vencord Installer", 1200, 800, 0)
 
@@ -125,7 +137,7 @@ func InstallLatestBuilds() (err error) {
 
 	err = installLatestBuilds()
 	if err != nil {
-		ShowModal("Failed to install the latest Vencord builds from GitHub", "If this issue persists, visit https://vencord.dev/support for help.", err.Error())
+		ShowModal(L.ModalInstallFailed, L.ModalInstallFailedDesc, err.Error())
 	}
 	return
 }
@@ -158,14 +170,14 @@ func handleOpenAsarConfirmed() {
 	if choice != nil {
 		if choice.IsOpenAsar() {
 			if err := choice.UninstallOpenAsar(); err != nil {
-				handleErr(choice, err, "uninstall OpenAsar from")
+				handleErr(choice, err, L.ModalTitleOAUninst)
 			} else {
 				g.OpenPopup("#openasar-unpatched")
 				g.Update()
 			}
 		} else {
 			if err := choice.InstallOpenAsar(); err != nil {
-				handleErr(choice, err, "install OpenAsar on")
+				handleErr(choice, err, L.ModalTitleOAInstall)
 			} else {
 				g.OpenPopup("#openasar-patched")
 				g.Update()
@@ -174,20 +186,20 @@ func handleOpenAsarConfirmed() {
 	}
 }
 
-func handleErr(di *DiscordInstall, err error, action string) {
+func handleErr(di *DiscordInstall, err error, modalTitle string) {
 	if errors.Is(err, os.ErrPermission) {
 		switch runtime.GOOS {
 		case "windows":
-			err = errors.New("Permission denied. Make sure your Discord is fully closed (from the tray)!")
+			err = errors.New(L.ErrPermWindows)
 		case "darwin":
 			HandleInsufficientPermissions()
 			return
 		default:
-			err = errors.New("Permission denied. Maybe try running me as Administrator/Root?")
+			err = errors.New(L.ErrPermUnix)
 		}
 	}
 
-	ShowModal("Failed to "+action+" this Install.", "If this issue persists, visit: https://vencord.dev/support", err.Error())
+	ShowModal(modalTitle, L.ModalVisitSupport, err.Error())
 }
 
 func HandleScuffedInstall() {
@@ -203,7 +215,7 @@ func (di *DiscordInstall) Patch() {
 		return
 	}
 	if err := di.patch(); err != nil {
-		handleErr(di, err, "patch")
+		handleErr(di, err, L.ModalTitlePatch)
 	} else {
 		g.OpenPopup("#patched")
 	}
@@ -211,7 +223,7 @@ func (di *DiscordInstall) Patch() {
 
 func (di *DiscordInstall) Unpatch() {
 	if err := di.unpatch(); err != nil {
-		handleErr(di, err, "unpatch")
+		handleErr(di, err, L.ModalTitleUnpatch)
 	} else {
 		g.OpenPopup("#unpatched")
 	}
@@ -288,8 +300,8 @@ func renderFilesDirErr() g.Widget {
 			SetFontSize(30).
 			To(
 				g.Align(g.AlignCenter).To(
-					g.Label("Error: Failed to create: "+FilesDirErr.Error()),
-					g.Label("Resolve this error, then restart me!"),
+					g.Label(L.FilesDirErrTitle+FilesDirErr.Error()),
+					g.Label(L.FilesDirErrHint),
 				),
 			),
 	}
@@ -339,7 +351,7 @@ func RawInfoModal(id, title, description, extra string, isOpenAsar bool) g.Widge
 					&CondWidget{id == "#scuffed-install", func() g.Widget {
 						return g.Column(
 							g.Dummy(0, 10),
-							g.Button("Take me there!").OnClick(func() {
+							g.Button(L.BtnTakeMeThere).OnClick(func() {
 								// this issue only exists on windows so using Windows specific path is oki
 								username := os.Getenv("USERNAME")
 								programData := os.Getenv("PROGRAMDATA")
@@ -351,7 +363,7 @@ func RawInfoModal(id, title, description, extra string, isOpenAsar bool) g.Widge
 					&CondWidget{id == "#insufficient-permissions", func() g.Widget {
 						return g.Column(
 							g.Dummy(0, 10),
-							g.Button("Open Settings").OnClick(func() {
+							g.Button(L.BtnOpenSettings).OnClick(func() {
 								// "App Management" permissions doesnt exist on Monterey, just use full disk access for now
 								g.OpenURL("x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles")
 							}).Size(200, 30),
@@ -360,13 +372,13 @@ func RawInfoModal(id, title, description, extra string, isOpenAsar bool) g.Widge
 					&CondWidget{isOpenAsar,
 						func() g.Widget {
 							return g.Row(
-								g.Button("Accept").
+								g.Button(L.BtnAccept).
 									OnClick(func() {
 										acceptedOpenAsar = true
 										g.CloseCurrentPopup()
 									}).
 									Size(100, 30),
-								g.Button("Cancel").
+								g.Button(L.BtnCancel).
 									OnClick(func() {
 										g.CloseCurrentPopup()
 									}).
@@ -374,7 +386,7 @@ func RawInfoModal(id, title, description, extra string, isOpenAsar bool) g.Widge
 							)
 						},
 						func() g.Widget {
-							return g.Button("Ok").
+							return g.Button(L.BtnOk).
 								OnClick(func() {
 									g.CloseCurrentPopup()
 								}).
@@ -395,19 +407,13 @@ func UpdateModal() g.Widget {
 				Layout(
 					g.Align(g.AlignCenter).To(
 						g.Style().SetFontSize(30).To(
-							g.Label("Your Installer is outdated!"),
+							g.Label(L.UpdateTitle),
 						),
 						g.Style().SetFontSize(20).To(
-							g.Label(
-								"Would you like to update now?\n\n"+
-									"Once you press Update Now, the new installer will automatically be downloaded.\n"+
-									"The installer will temporarily seem unresponsive. Just wait!\n"+
-									"Once the update is done, the Installer will automatically reopen.\n\n"+
-									"On MacOs, Auto updates are not supported, so it will instead open in browser.",
-							),
+							g.Label(L.UpdateBody),
 						),
 						g.Row(
-							g.Button("Update Now").
+							g.Button(L.BtnUpdateNow).
 								OnClick(func() {
 									if runtime.GOOS == "darwin" {
 										g.CloseCurrentPopup()
@@ -419,15 +425,15 @@ func UpdateModal() g.Widget {
 									g.CloseCurrentPopup()
 
 									if err != nil {
-										ShowModal("Failed to update self!", "Please manually download the latest Installer.", err.Error())
+										ShowModal(L.ModalSelfUpdateFailTitle, L.ModalSelfUpdateFailDesc, err.Error())
 									} else {
 										if err = RelaunchSelf(); err != nil {
-											ShowModal("Failed to restart self!", "Please manually restart the Installer.", err.Error())
+											ShowModal(L.ModalSelfRestartFailTitle, L.ModalSelfRestartFailDesc, err.Error())
 										}
 									}
 								}).
 								Size(100, 30),
-							g.Button("Later").
+							g.Button(L.BtnLater).
 								OnClick(func() {
 									g.CloseCurrentPopup()
 								}).
@@ -468,8 +474,7 @@ func renderInstaller() g.Widget {
 			renderErrorCard(
 				DiscordYellow,
 				color.Black,
-				"**Github** and **vencord.dev** are the only official places to get Vencord. Any other site claiming to be us is malicious.\n"+
-					"If you downloaded from any other source, you should delete / uninstall everything immediately, run a malware scan and change your Discord password.",
+				L.OfficialSourcesWarn,
 				90,
 			),
 		),
@@ -477,23 +482,23 @@ func renderInstaller() g.Widget {
 		g.Dummy(0, 20),
 
 		g.Style().SetFontSize(30).To(
-			g.Label("Please select an install to patch"),
+			g.Label(L.SelectInstallPrompt),
 		),
 		g.Dummy(0, 10),
 
 		&CondWidget{len(discords) == 0, func() g.Widget {
-			s := "No Discord installs found. You first need to install Discord."
+			s := L.NoDiscordFound
 			if runtime.GOOS == "linux" {
-				s += " snap is not supported."
+				s += L.SnapUnsupported
 			}
 
-			return &CondWidget{!showCustomLocation, func() g.Widget {
-				return g.Column(
-					g.Style().SetFontSize(25).To(g.Label(s)),
-					g.Dummy(0, 10),
-					g.Checkbox("I am an advanced user and have Discord installed at a different location", &showCustomLocation),
-				)
-			}, nil}
+				return &CondWidget{!showCustomLocation, func() g.Widget {
+					return g.Column(
+						g.Style().SetFontSize(25).To(g.Label(s)),
+						g.Dummy(0, 10),
+						g.Checkbox(L.AdvancedUserCheckbox, &showCustomLocation),
+					)
+				}, nil}
 		}, nil},
 
 		g.Style().SetFontSize(20).To(
@@ -512,7 +517,7 @@ func renderInstaller() g.Widget {
 				}
 
 				if d.isPatched {
-					text += " (Vencord Installed)"
+					text += L.VencordInstalledSfx
 				}
 
 				return g.Row(
@@ -521,18 +526,18 @@ func renderInstaller() g.Widget {
 				)
 			}),
 			&CondWidget{showCustomLocation, func() g.Widget {
-				return g.RadioButton("Custom Install Location", radioIdx == customChoiceIdx).OnChange(makeRadioOnChange(customChoiceIdx))
+				return g.RadioButton(L.CustomLocationRadio, radioIdx == customChoiceIdx).OnChange(makeRadioOnChange(customChoiceIdx))
 			}, nil},
 		),
 
-		&CondWidget{showCustomLocation, func() g.Widget {
-			return g.Column(
-				g.Dummy(0, 5),
-				g.Style().
-					SetStyle(g.StyleVarFramePadding, 16, 16).
-					SetFontSize(20).
-					To(
-						g.InputText(&customDir).Hint("The custom location").
+			&CondWidget{showCustomLocation, func() g.Widget {
+				return g.Column(
+					g.Dummy(0, 5),
+					g.Style().
+						SetStyle(g.StyleVarFramePadding, 16, 16).
+						SetFontSize(20).
+						To(
+							g.InputText(&customDir).Hint(L.CustomLocationHint).
 							Size(w-16).
 							Flags(g.InputTextFlagsCallbackCompletion).
 							OnChange(onCustomInputChanged).
@@ -586,10 +591,10 @@ func renderInstaller() g.Widget {
 					SetStyle(g.StyleVarFrameRounding, 8, 8).
 					SetDisabled(GithubError != nil).
 					To(
-						g.Button("Install").
+						g.Button(L.BtnInstall).
 							OnClick(handlePatch).
 							Size((w-40)/4, 50),
-						Tooltip("Patch the selected Discord Install"),
+						Tooltip(L.TipInstall),
 					),
 				g.Style().
 					SetColor(g.StyleColorButton, DiscordBlue).
@@ -597,7 +602,7 @@ func renderInstaller() g.Widget {
 					SetStyle(g.StyleVarFrameRounding, 8, 8).
 					SetDisabled(GithubError != nil).
 					To(
-						g.Button("Reinstall / Repair").
+						g.Button(L.BtnReinstallRepair).
 							OnClick(func() {
 								if IsDevInstall {
 									handlePatch()
@@ -609,48 +614,39 @@ func renderInstaller() g.Widget {
 								}
 							}).
 							Size((w-40)/4, 50),
-						Tooltip("Reinstall & Update Vencord"),
+						Tooltip(L.TipReinstall),
 					),
 				g.Style().
 					SetColor(g.StyleColorButton, DiscordRed).
 					SetColor(g.StyleColorButtonHovered, DiscordRedHovered).
 					SetStyle(g.StyleVarFrameRounding, 8, 8).
 					To(
-						g.Button("Uninstall").
+						g.Button(L.BtnUninstall).
 							OnClick(handleUnpatch).
 							Size((w-40)/4, 50),
-						Tooltip("Unpatch the selected Discord Install"),
+						Tooltip(L.TipUninstall),
 					),
 				g.Style().
 					SetColor(g.StyleColorButton, Ternary(isOpenAsar, DiscordRed, DiscordGreen)).
 					SetColor(g.StyleColorButtonHovered, Ternary(isOpenAsar, DiscordRedHovered, DiscordGreenHovered)).
 					SetStyle(g.StyleVarFrameRounding, 8, 8).
 					To(
-						g.Button(Ternary(isOpenAsar, "Uninstall OpenAsar", Ternary(currentDiscord != nil, "Install OpenAsar", "(Un-)Install OpenAsar"))).
+						g.Button(Ternary(isOpenAsar, L.BtnUninstallOpenAsar, Ternary(currentDiscord != nil, L.BtnInstallOpenAsar, L.BtnUninstInstallOA))).
 							OnClick(handleOpenAsar).
 							Size((w-40)/4, 50),
-						Tooltip("Manage OpenAsar"),
+						Tooltip(L.TipOpenAsar),
 					),
 			),
 		),
 
-		InfoModal("#patched", "Installed!", "Vencord was successfully installed!"),
-		InfoModal("#unpatched", "Uninstalled", "Vencord has been uninstalled!"),
-		InfoModal("#scuffed-install", "Hold On!", "You have a broken Discord Install.\n"+
-			"Sometimes Discord decides to install to the wrong location for some reason!\n"+
-			"You need to fix this before patching, otherwise Vencord will likely not work.\n\n"+
-			"Use the below button to jump there and delete any folder called Discord or Squirrel.\n"+
-			"If the folder is now empty, feel free to go back a step and delete that folder too.\n"+
-			"Then see if Discord still starts. If not, reinstall it"),
-		RawInfoModal("#openasar-confirm", "OpenAsar", "OpenAsar is an open-source alternative of Discord desktop's app.asar.\n"+
-			"Vencord is in no way affiliated with OpenAsar.\n"+
-			"You're installing OpenAsar at your own risk. If you run into issues with OpenAsar,\n"+
-			"no support will be provided, join the OpenAsar Server instead!\n\n"+
-			"To install OpenAsar, press Accept and click 'Install OpenAsar' again.", "", true),
-		InfoModal("#insufficient-permissions", "Insufficient Permissions", "Permission denied. Please grant the installer permissions in the settings."),
-		InfoModal("#openasar-patched", "Successfully Installed OpenAsar", "If Discord is still open, fully close it first. Then start it again and verify OpenAsar installed successfully!"),
-		InfoModal("#openasar-unpatched", "Successfully Uninstalled OpenAsar", "If Discord is still open, fully close it first. Then start it again and it should be back to stock!"),
-		InfoModal("#invalid-custom-location", "Invalid Location", "The specified location is not a valid Discord install.\nMake sure you select the base folder.\n\nHint: Discord snap is not supported. use flatpak or .deb"),
+		InfoModal("#patched", L.ModalPatchedTitle, L.ModalPatchedDesc),
+		InfoModal("#unpatched", L.ModalUnpatchedTitle, L.ModalUnpatchedDesc),
+		InfoModal("#scuffed-install", L.ModalScuffedTitle, L.ModalScuffedDesc),
+		RawInfoModal("#openasar-confirm", "OpenAsar", L.OpenAsarConfirmDesc, "", true),
+		InfoModal("#insufficient-permissions", L.ModalPermsTitle, L.ModalPermsDesc),
+		InfoModal("#openasar-patched", L.ModalOAPatchedTitle, L.ModalOAPatchedDesc),
+		InfoModal("#openasar-unpatched", L.ModalOAUnpatchedTitle, L.ModalOAUnpatchedDesc),
+		InfoModal("#invalid-custom-location", L.ModalInvalidLocTitle, L.ModalInvalidLocDesc),
 		InfoModalExtra("#modal"+strconv.Itoa(modalId), modalTitle, modalMessage, modalExtra),
 
 		UpdateModal(),
@@ -705,7 +701,7 @@ func loop() {
 			&CondWidget{
 				GithubError != nil,
 				func() g.Widget {
-					return g.Style().SetFontSize(20).To(renderErrorCard(DiscordRed, color.White, "Failed to fetch Info from GitHub. If this issue persists, visit https://vencord.dev/support for help.", 40))
+					return g.Style().SetFontSize(20).To(renderErrorCard(DiscordRed, color.White, L.GithubErrorCard, 40))
 				},
 				nil,
 			},
