@@ -101,7 +101,7 @@ func selectVencordRelease(releases []GithubRelease) (*GithubRelease, error) {
 		}
 	}
 	if best == nil {
-		return nil, errors.New("no yepyepos/Vencord release ships the required Vencord desktop files (patcher.js, preload.js, renderer.js, renderer.css)")
+		return nil, errors.New(L.ErrNoDesktopAssets)
 	}
 	return best, nil
 }
@@ -111,7 +111,7 @@ func fetchGithubReleases(url, fallbackUrl string) ([]GithubRelease, error) {
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		Log.Error("Failed to create Request", err)
+		Log.Error(L.LogCreateRequestFail, err)
 		return nil, err
 	}
 
@@ -119,7 +119,7 @@ func fetchGithubReleases(url, fallbackUrl string) ([]GithubRelease, error) {
 
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
-		Log.Error("Failed to send Request", err)
+		Log.Error(L.LogSendFail, err)
 		return nil, err
 	}
 
@@ -130,19 +130,19 @@ func fetchGithubReleases(url, fallbackUrl string) ([]GithubRelease, error) {
 		triedFallback := url == fallbackUrl
 
 		if isRateLimitedOrBlocked && !triedFallback {
-			Log.Error(fmt.Sprintf("Failed to fetch %s (status code %d). Trying fallback url %s", url, res.StatusCode, fallbackUrl))
+			Log.Error(fmt.Sprintf(L.LogFetchFallbackFmt, url, res.StatusCode, fallbackUrl))
 			return fetchGithubReleases(fallbackUrl, fallbackUrl)
 		}
 
 		err = errors.New(res.Status)
-		Log.Error(url, "returned Non-OK status", err)
+		Log.Error(url, L.LogNonOKStatus, err)
 		return nil, err
 	}
 
 	var releases []GithubRelease
 
 	if err = json.NewDecoder(res.Body).Decode(&releases); err != nil {
-		Log.Error("Failed to decode GitHub JSON Response", err)
+		Log.Error(L.LogDecodeFail, err)
 		return nil, err
 	}
 
@@ -223,7 +223,7 @@ func InitGithubDownloader() {
 
 		data, err := GetLatestVencordRelease()
 		if err != nil {
-			Log.Error("Failed to fetch Vencord release data:", err)
+			Log.Error(L.LogFetchDataFailed, err)
 			GithubError = err
 			return
 		}
@@ -269,7 +269,7 @@ func installLatestBuilds() (retErr error) {
 	pkgJsonFile := path.Join(FilesDir, "package.json")
 	err := os.WriteFile(pkgJsonFile, []byte("{}"), 0644)
 	if err != nil {
-		Log.Warn("Failed to create", pkgJsonFile, err)
+		Log.Warn(L.LogCreateFail, pkgJsonFile, err)
 	}
 
 	var wg sync.WaitGroup
@@ -295,20 +295,20 @@ func installLatestBuilds() (retErr error) {
 					err = errors.New(res.Status)
 				}
 				if err != nil {
-					Log.Error("Failed to download", ass.Name+":", err)
+					Log.Error(L.LogDownloadFail, ass.Name+":", err)
 					retErr = err
 					return
 				}
 				outFile := path.Join(FilesDir, ass.Name)
 				out, err := os.OpenFile(outFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
 				if err != nil {
-					Log.Error("Failed to create", outFile+":", err)
+					Log.Error(L.LogCreateFail, outFile+":", err)
 					retErr = err
 					return
 				}
 				read, err := io.Copy(out, res.Body)
 				if err != nil {
-					Log.Error("Failed to download to", outFile+":", err)
+					Log.Error(L.LogDownloadToFail, outFile+":", err)
 					retErr = err
 					return
 				}
@@ -331,7 +331,7 @@ func installLatestBuilds() (retErr error) {
 		return retErr
 	}
 	if downloadedFiles.Load() < 4 {
-		return errors.New("Couldn't find all required files")
+		return errors.New(L.ErrMissingFiles)
 	}
 
 	Log.Debug("Done!")
@@ -345,7 +345,7 @@ func installLatestBuilds() (retErr error) {
 		if scanner.Scan() {
 			line := scanner.Text()
 			if !strings.HasPrefix(line, "// Vencord ") || line[11:] != LatestHash {
-				Log.Warn("Release contract violation: downloaded patcher.js hash does not match the hash advertised by the release!", line, "!=", LatestHash)
+				Log.Warn(L.LogContractViolation, line, "!=", LatestHash)
 			}
 		}
 		f.Close()

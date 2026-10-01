@@ -8,6 +8,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"github.com/ProtonMail/go-appdir"
 	"os"
 	"os/exec"
@@ -35,7 +36,7 @@ func init() {
 	if !ExistsFile(FilesDir) {
 		FilesDirErr = os.MkdirAll(FilesDir, 0755)
 		if FilesDirErr != nil {
-			Log.Error("Failed to create", FilesDir, FilesDirErr)
+			Log.Error(L.LogCreateFail, FilesDir, FilesDirErr)
 		} else {
 			FilesDirErr = FixOwnership(BaseDir)
 		}
@@ -62,12 +63,12 @@ func patchAppAsar(dir string, isSystemElectron bool) (err error) {
 	var renamesDone [][]string
 	defer func() {
 		if err != nil && len(renamesDone) > 0 {
-			Log.Error("Failed to patch. Undoing partial patch")
+			Log.Error(L.LogUndoPatchFailed)
 			for _, rename := range renamesDone {
 				if innerErr := os.Rename(rename[1], rename[0]); innerErr != nil {
-					Log.Error("Failed to undo partial patch. This install is probably bricked.", innerErr)
+					Log.Error(L.LogUndoPatchBricked, innerErr)
 				} else {
-					Log.Info("Successfully undid all changes")
+					Log.Info(L.LogUndidAllChanges)
 				}
 			}
 		}
@@ -100,7 +101,7 @@ func patchAppAsar(dir string, isSystemElectron bool) (err error) {
 }
 
 func (di *DiscordInstall) patch() error {
-	Log.Info("Patching " + di.path + "...")
+	Log.Info(fmt.Sprintf(L.LogPatchingFmt, di.path))
 	if LatestHash != InstalledHash {
 		if err := InstallLatestBuilds(); err != nil {
 			return nil // already shown dialog so don't return same error again
@@ -110,12 +111,12 @@ func (di *DiscordInstall) patch() error {
 	PreparePatch(di)
 
 	if di.isPatched {
-		Log.Info(di.path, "is already patched. Unpatching first...")
+		Log.Info(fmt.Sprintf(L.LogAlreadyPatchedFmt, di.path))
 		if err := di.unpatch(); err != nil {
 			if errors.Is(err, os.ErrPermission) {
 				return err
 			}
-			return errors.New("patch: Failed to unpatch already patched install '" + di.path + "':\n" + err.Error())
+			return fmt.Errorf(L.ErrUnpatchPatchedFmt, di.path, err)
 		}
 	}
 
@@ -129,7 +130,7 @@ func (di *DiscordInstall) patch() error {
 		}
 	}
 
-	Log.Info("Successfully patched", di.path)
+	Log.Info(L.LogPatched, di.path)
 	di.isPatched = true
 
 	if di.isFlatpak {
@@ -170,7 +171,7 @@ func (di *DiscordInstall) patch() error {
 			err = cmd.Run()
 		}
 		if err != nil {
-			return errors.New("Failed to grant Discord Flatpak access to " + FilesDir + ": " + err.Error())
+			return fmt.Errorf(L.ErrFlatpakFmt, FilesDir, err)
 		}
 	}
 	return nil
@@ -188,17 +189,17 @@ func unpatchAppAsar(dir string, isSystemElectron bool) (errOut error) {
 	var renamesDone [][]string
 	defer func() {
 		if errOut != nil && len(renamesDone) > 0 {
-			Log.Error("Failed to unpatch. Undoing partial unpatch")
+			Log.Error(L.LogUndoUnpatchFailed)
 			for _, rename := range renamesDone {
 				if innerErr := os.Rename(rename[1], rename[0]); innerErr != nil {
-					Log.Error("Failed to undo partial unpatch. This install is probably bricked.", innerErr)
+					Log.Error(L.LogUndoUnpatchBricked, innerErr)
 				} else {
-					Log.Info("Successfully undid all changes")
+					Log.Info(L.LogUndidAllChanges)
 				}
 			}
 		} else if errOut == nil {
 			if innerErr := os.RemoveAll(appAsarTmp); innerErr != nil {
-				Log.Warn("Failed to delete temporary app.asar (patch folder) backup. This is whatever but you might want to delete it manually.", innerErr)
+				Log.Warn(L.LogTmpBackupFail, innerErr)
 			}
 		}
 	}()
@@ -232,7 +233,7 @@ func unpatchAppAsar(dir string, isSystemElectron bool) (errOut error) {
 }
 
 func (di *DiscordInstall) unpatch() error {
-	Log.Info("Unpatching " + di.path + "...")
+	Log.Info(fmt.Sprintf(L.LogUnpatchingFmt, di.path))
 
 	PreparePatch(di)
 
@@ -246,7 +247,7 @@ func (di *DiscordInstall) unpatch() error {
 		}
 	}
 
-	Log.Info("Successfully unpatched", di.path)
+	Log.Info(L.LogUnpatched, di.path)
 	di.isPatched = false
 	return nil
 }
