@@ -126,6 +126,22 @@ type UI struct {
 	CliDownloading        string
 	CliDone               string
 
+	// Self updater
+	SelfCheckFail         string
+	SelfNoValidRelease    string
+	SelfUpToDateErr       string
+	SelfNoAssetErr        string
+	SelfNoAssetFmt        string
+	SelfDownloadStatusFmt string
+	SelfTempFailFmt       string
+	SelfRemoveFailFmt     string
+	SelfReplaceFailFmt    string
+	SelfStartFailFmt      string
+	SelfReleaseProcFailFmt string
+	SelfLengthMismatchFmt  string
+	SelfRollbackOk         string
+	CliSelfUpdateFail      string
+
 	// Shared log & error messages
 	LogPatchingFmt     string
 	LogAlreadyPatchedFmt string
@@ -282,6 +298,21 @@ var English = UI{
 	CliDownloading:         "Downloading latest Vencord files...",
 	CliDone:                "Done!",
 
+	SelfCheckFail:          "Failed to check for installer updates:",
+	SelfNoValidRelease:     "no yepyepos/Installer release with a valid version tag found",
+	SelfUpToDateErr:        "Cannot update self. Either no update available or macos",
+	SelfNoAssetErr:         "update asset not found",
+	SelfNoAssetFmt:         "update asset '%s' not found in the latest release",
+	SelfDownloadStatusFmt:  "Failed to download update (status code %d): %s",
+	SelfTempFailFmt:        "Failed to create tempfile: %w",
+	SelfRemoveFailFmt:      "Failed to remove/rename own executable: %w",
+	SelfReplaceFailFmt:     "Failed to replace self with updated executable. Please manually redownload the installer: %w",
+	SelfStartFailFmt:       "Failed to start new process: %w",
+	SelfReleaseProcFailFmt: "Failed to release new process: %w",
+	SelfLengthMismatchFmt:  "Unexpected end of input. Content-Length was %s, but I only read %s",
+	SelfRollbackOk:         "Update failed, previous executable restored",
+	CliSelfUpdateFail:      "Failed to update self:",
+
 	LogPatchingFmt:        "Patching %s...",
 	LogAlreadyPatchedFmt:  "%s is already patched. Unpatching first...",
 	LogPatched:            "Successfully patched",
@@ -436,6 +467,21 @@ var Chinese = UI{
 	CliScuffedBody3:        "请先重新安装 Discord 再继续！否则 Vencord 很可能无法正常工作。",
 	CliDownloading:         "正在下载最新 Vencord 文件…",
 	CliDone:                "完成！",
+
+	SelfCheckFail:          "检查安装器更新失败：",
+	SelfNoValidRelease:     "没有找到包含有效版本号的 yepyepos/Installer Release",
+	SelfUpToDateErr:        "无法自更新：已是最新版本，或当前平台不支持自动更新",
+	SelfNoAssetErr:         "未找到更新文件",
+	SelfNoAssetFmt:         "最新 Release 中未找到更新文件 %s",
+	SelfDownloadStatusFmt:  "下载更新失败（状态码 %d）：%s",
+	SelfTempFailFmt:        "创建临时文件失败：%w",
+	SelfRemoveFailFmt:      "移除/重命名自身可执行文件失败：%w",
+	SelfReplaceFailFmt:     "替换自身失败，请手动重新下载安装器：%w",
+	SelfStartFailFmt:       "启动新进程失败：%w",
+	SelfReleaseProcFailFmt: "释放新进程句柄失败：%w",
+	SelfLengthMismatchFmt:  "下载不完整：Content-Length 为 %s，实际读取 %s",
+	SelfRollbackOk:         "更新失败，已恢复旧版安装器",
+	CliSelfUpdateFail:      "安装器自更新失败：",
 
 	LogPatchingFmt:        "正在修补 %s…",
 	LogAlreadyPatchedFmt:  "%s 已安装过 Vencord，正在先卸载旧补丁…",

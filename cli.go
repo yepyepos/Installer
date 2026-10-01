@@ -75,7 +75,7 @@ func main() {
 			die(L.CliDieUpdateCheckFail)
 		}
 		if err := UpdateSelf(); err != nil {
-			Log.Error("Failed to update self:", err)
+			Log.Error(L.CliSelfUpdateFail, err)
 			exitFailure()
 		}
 		exitSuccess()
@@ -132,7 +132,7 @@ func main() {
 			return
 		case L.CliMenuUpdate:
 			if err := UpdateSelf(); err != nil {
-				Log.Error("Failed to update self:", err)
+				Log.Error(L.CliSelfUpdateFail, err)
 				exitFailure()
 			}
 			exitSuccess()

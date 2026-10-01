@@ -20,10 +20,16 @@ import (
 // official English Vencord (Vendicated/Vencord / vencord.dev).
 const ReleaseUrl = "https://api.github.com/repos/yepyepos/Vencord/releases?per_page=20"
 const ReleaseUrlFallback = "https://api.github.com/repos/yepyepos/Vencord/releases?per_page=20"
-const InstallerReleaseUrl = "https://api.github.com/repos/Vencord/Installer/releases/latest"
-const InstallerReleaseUrlFallback = "https://vencord.dev/releases/installer"
+// Self-update source: the zh-CN fork updates itself exclusively from
+// yepyepos/Installer. Like the Vencord source above we use the releases LIST
+// endpoint so pre-releases are selectable and the newest release is picked by
+// actual version comparison. The fallback points at the same endpoint on
+// purpose: if GitHub API access fails the installer must fail loudly instead
+// of silently updating to the official English installer.
+const InstallerReleaseUrl = "https://api.github.com/repos/yepyepos/Installer/releases?per_page=20"
+const InstallerReleaseUrlFallback = "https://api.github.com/repos/yepyepos/Installer/releases?per_page=20"
 
-var UserAgent = "VencordInstaller/" + buildinfo.InstallerGitHash + " (https://github.com/Vencord/Installer)"
+var UserAgent = "VencordInstaller/" + buildinfo.InstallerGitHash + " (https://github.com/yepyepos/Installer)"
 
 var (
 	DiscordGreen        = color.RGBA{0, 133, 69, 0xff}
