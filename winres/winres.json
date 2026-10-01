@@ -21,9 +21,9 @@
       "0000": {
         "info": {
           "0409": {
-            "Comments": "Comments",
-            "CompanyName": "Vencord",
-            "FileDescription": "Vencord Installer",
+            "Comments": "Community zh-CN fork of https://github.com/Vencord/Installer (GPL-3.0)",
+            "CompanyName": "Vencord Installer zh-CN Community",
+            "FileDescription": "Vencord 简体中文社区安装器",
             "LegalCopyright": "© 2023 Vendicated and Contributors - GPL3.0",
             "ProductName": "Vencord Installer",
             "ProductVersion": ""

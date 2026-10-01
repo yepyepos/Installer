@@ -249,12 +249,30 @@ func InitGithubDownloader() {
 	if scanner.Scan() {
 		line := scanner.Text()
 		if strings.HasPrefix(line, "// Vencord ") {
-			InstalledHash = line[11:]
-			Log.Debug("Existing hash is", InstalledHash)
+			if !distHasAllDesktopFiles(FilesDir) {
+				// Interrupted download left a partial dist behind: treat the
+				// install as outdated so all files are fetched again.
+				Log.Debug("Dist folder is incomplete, treating install as outdated")
+			} else {
+				InstalledHash = line[11:]
+				Log.Debug("Existing hash is", InstalledHash)
+			}
 		} else {
 			Log.Debug("Didn't find hash")
 		}
 	}
+}
+
+// distHasAllDesktopFiles reports whether every required desktop dist file is
+// present in dir. A partial dist (e.g. left behind by an interrupted
+// download) must never count as an installed version.
+func distHasAllDesktopFiles(dir string) bool {
+	for _, name := range requiredDesktopAssets {
+		if !ExistsFile(path.Join(dir, name)) {
+			return false
+		}
+	}
+	return true
 }
 
 func installLatestBuilds() (retErr error) {
