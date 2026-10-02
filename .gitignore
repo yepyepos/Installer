@@ -4,3 +4,5 @@ vencordinstaller
 *.old
 build
 .DS_Store
+# local manual-acceptance packages (never commit)
+artifacts/
