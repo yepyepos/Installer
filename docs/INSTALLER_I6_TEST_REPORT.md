@@ -101,3 +101,45 @@ P3 = 2（SHA256SUMS CRLF——已修复代码，I7 生效；SmartScreen 提示�
 
 **允许进入 I7 Stable Release。** Stable 建议直接以 v1.4.2-zh.4 的 commit 为基础重新
 打 Stable tag 构建（或按 I7 方案），本报告作为发布前验收依据。
+
+---
+
+# I7 Stable 发布验证补充（2026-10-02）
+
+对象：v1.4.2-zh.5（首发 Stable 候选）→ v1.4.2-zh.6（最终 Stable）
+
+## I7 发现并修复的 P1
+
+- **CLI 下载失败假成功**：网络中断导致 Vencord dist 下载失败时，`patch()` 沿用上游
+  `return nil`（GUI 有弹窗所以合理），CLI 却打印"✔ 操作成功"——实际什么都没 patch。
+  真实网络抖动下复现（同一会话内 3 次）。
+- **处置**（按阻塞协议）：zh.5 立即降级 Pre-release → 最小修复（CLI 在 patch 后校验
+  installed hash 是否更新，未更新则以中文原因失败；exitFailure 前打印静默错误）→
+  发布 v1.4.2-zh.6 Stable。
+- **修复实证**：断网/metadata 失败路径正确拒绝；真实网络抖动下 8 次连续下载失败
+  全部正确 ❌、目标 asar 全程未损、0 假成功；网络恢复后 install 真实成功
+  （redirector + _app.asar）。
+
+## I7 Stable（v1.4.2-zh.6）发布后矩阵
+
+| 项目 | 结果 |
+| --- | --- |
+| 发布后重新下载 SHA256（LF 直校） | PASS（sha256sum -c 直接 OK） |
+| Defender（Stable 下载件） | PASS（0 威胁） |
+| -version / --help（下载件） | PASS（v1.4.2-zh.6 (be81596)，中文帮助） |
+| GUI Stable 启动 | PASS（中文、已安装标记、无更新弹窗、空壳不出现，截图） |
+| 英文 fallback | PASS（I6 已验，代码未变） |
+| Fresh install（Stable CLI，真实网络） | PASS（✔ + redirector + _app.asar） |
+| Repair | PASS |
+| Uninstall（字节级还原） | PASS（sha256 与原始一致） |
+| 卸载后重装 | PASS |
+| 发布后升级 zh.4 → zh.6 自更新 | PASS（✔ 操作成功，版本 be81596） |
+| Already up to date（zh.6） | PASS（"已是最新版本"，无循环） |
+| 网络失败保旧版 | PASS（zh.4 自更新 3 次失败均完好回滚） |
+| 空壳 app-* 永久回归 | PASS（真实空壳 9260 存在下全部操作正确跳过） |
+| 残留检查 | PASS（无 .old/临时文件堆积） |
+| go test / go vet | PASS / 0 warnings |
+| 125%/150% DPI | NOT TESTED（需系统注销，已在 Stable Release Notes 披露） |
+| Administrator 提升 | NOT TESTED（UAC 交互无法自动化；全部功能路径已在标准用户下验证） |
+
+**最终：P0=0，P1=0（I7 P1 已修复重验），P2=0，P3=已知项（SmartScreen/未签名、DPI 未实测）——Stable v1.4.2-zh.6 发布通过。**
