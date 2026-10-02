@@ -47,6 +47,12 @@ func ParseDiscord(p, branch string) *DiscordInstall {
 			if !ExistsFile(resources) {
 				continue
 			}
+			// An interrupted Discord update can leave an app-* stub with an
+			// empty resources folder behind; that is not an install.
+			if !ExistsFile(path.Join(resources, "app.asar")) && !ExistsFile(path.Join(resources, "_app.asar")) {
+				Log.Debug("Skipping update stub without asar files: ", resources)
+				continue
+			}
 			app := path.Join(resources, "app")
 			if app > appPath {
 				appPath = app
