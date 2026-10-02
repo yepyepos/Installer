@@ -65,11 +65,12 @@ jobs:
       - name: Generate SHA256 checksums
         shell: pwsh
         run: |
-          $lines = Get-ChildItem build -File | ForEach-Object {
+          $lines = Get-ChildItem build -File | Where-Object { $_.Name -ne "SHA256SUMS.txt" } | ForEach-Object {
             $h = (Get-FileHash $_.FullName -Algorithm SHA256).Hash
             "$($h.ToLower())  $($_.Name)"
           }
-          $lines | Out-File -FilePath build/SHA256SUMS.txt -Encoding ascii
+          # LF line endings so sha256sum -c works on every platform
+          [IO.File]::WriteAllText("$PWD/build/SHA256SUMS.txt", ($lines -join "`n") + "`n")
           Get-Content build/SHA256SUMS.txt
 
       - name: Upload artifact
