@@ -145,14 +145,23 @@ func main() {
 	var errSilent error
 	if install {
 		errSilent = PromptDiscord("patch", *locationFlag, *branchFlag).patch()
+		// patch() swallows download failures because the GUI shows a dialog
+		// instead; the CLI must not print success when nothing was patched.
+		if errSilent == nil && LatestHash != InstalledHash && !IsDevInstall {
+			errSilent = errors.New(L.CliPatchDownloadFailed)
+		}
 	} else if uninstall {
 		errSilent = PromptDiscord("unpatch", *locationFlag, *branchFlag).unpatch()
 	} else if update {
 		Log.Info(L.CliDownloading)
-		err := installLatestBuilds()
-		Log.Info(L.CliDone)
-		if err == nil {
+		if err := installLatestBuilds(); err != nil {
+			errSilent = err
+		} else {
+			Log.Info(L.CliDone)
 			errSilent = PromptDiscord("repair", *locationFlag, *branchFlag).patch()
+			if errSilent == nil && LatestHash != InstalledHash && !IsDevInstall {
+				errSilent = errors.New(L.CliPatchDownloadFailed)
+			}
 		}
 	} else if installOpenAsar {
 		discord := PromptDiscord("patch", *locationFlag, *branchFlag)
@@ -175,6 +184,9 @@ func main() {
 		exitFailure()
 	}
 	if errSilent != nil {
+		// Silent errors already have a GUI dialog equivalent; the CLI has no
+		// dialog, so the reason must be printed before failing.
+		Log.Error(errSilent)
 		exitFailure()
 	}
 

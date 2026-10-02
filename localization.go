@@ -141,6 +141,7 @@ type UI struct {
 	SelfLengthMismatchFmt  string
 	SelfRollbackOk         string
 	CliSelfUpdateFail      string
+	CliPatchDownloadFailed string
 
 	// Shared log & error messages
 	LogPatchingFmt     string
@@ -312,6 +313,7 @@ var English = UI{
 	SelfLengthMismatchFmt:  "Unexpected end of input. Content-Length was %s, but I only read %s",
 	SelfRollbackOk:         "Update failed, previous executable restored",
 	CliSelfUpdateFail:      "Failed to update self:",
+	CliPatchDownloadFailed: "Vencord files were not downloaded completely; nothing was patched. Check your network and try again.",
 
 	LogPatchingFmt:        "Patching %s...",
 	LogAlreadyPatchedFmt:  "%s is already patched. Unpatching first...",
@@ -482,6 +484,7 @@ var Chinese = UI{
 	SelfLengthMismatchFmt:  "下载不完整：Content-Length 为 %s，实际读取 %s",
 	SelfRollbackOk:         "更新失败，已恢复旧版安装器",
 	CliSelfUpdateFail:      "安装器自更新失败：",
+	CliPatchDownloadFailed: "Vencord 文件未能完整下载，本次未进行修补。请检查网络后重试。",
 
 	LogPatchingFmt:        "正在修补 %s…",
 	LogAlreadyPatchedFmt:  "%s 已安装过 Vencord，正在先卸载旧补丁…",
